@@ -1,9 +1,7 @@
 // /api/boards/[id].js
-// Edge Function storing JSON per board in Vercel Blob.
-// Project Settings → Environment Variables: BLOB_READ_WRITE_TOKEN
+// Node.js Serverless Function (Node 20.x) using Web Handler signature.
+// Stores JSON per board in Vercel Blob. Requires env var BLOB_READ_WRITE_TOKEN or same project as Blob store.
 import { put, get } from '@vercel/blob';
-
-export const config = { runtime: 'edge' };
 
 export default async function handler(request) {
   try {
@@ -28,8 +26,7 @@ export default async function handler(request) {
     if (request.method === 'PUT') {
       try {
         const body = await request.text();
-        // Basic sanity check
-        JSON.parse(body);
+        JSON.parse(body); // sanity check
         await put(key, body, { access: 'public', contentType: 'application/json' });
         return new Response(JSON.stringify({ ok: true }), { status: 200, headers: {'content-type':'application/json'} });
       } catch (e) {
