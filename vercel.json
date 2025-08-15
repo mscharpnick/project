@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/boards/[id].js": {
+      "runtime": "edge"
+    }
+  }
+}

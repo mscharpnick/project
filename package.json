@@ -1,0 +1,9 @@
+{
+  "name": "workstream-tracker",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "dependencies": {
+    "@vercel/blob": "latest"
+  }
+}

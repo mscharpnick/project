@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Workstream Progress Tracker — Vertical Milestones v5 (Share-ready)</title>
+<style>
+  :root{
+    --bg:#0e141f;
+    --panel:#0f172a;
+    --panel-2:#0b1224;
+    --ink:#ebf1ff;
+    --muted:#b4c0da;
+    --accent:#6ea8ff;
+    --good:#39d18f;
+    --warn:#ffc857;
+    --danger:#ff6b6b;
+    --grid:#26324b;
+    --grid-dash:#2e3c5c;
+    --lane-h:150px;
+    --month-w:220px;
+    --gutter-left:28px;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; color:var(--ink);
+    font:500 14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;
+    background:radial-gradient(1200px 600px at 20% -10%, #0f1b37 0%, transparent 50%),
+               linear-gradient(180deg, var(--panel-2), #0a1223 60%);
+    overflow:auto; /* page scroll */
+  }
+  .app{min-height:100%; padding:20px clamp(16px,3vw,28px) 24px; display:flex; flex-direction:column; gap:12px}
+  header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  h1{margin:0 10px 0 0;font-size:22px;letter-spacing:.3px}
+  .chip{background:#121b34;border:1px solid #2a3756;color:#dce6ff;padding:8px 12px;border-radius:999px;font-weight:800}
+  .btn{background:#1a2544;border:1px solid #2a3756;color:#eaf1ff;padding:10px 12px;border-radius:10px;cursor:pointer;font-weight:800}
+  .btn:hover{filter:brightness(1.06)} .btn.primary{background:linear-gradient(180deg,#2b5bff,#1c3cff);border-color:#3450ff}
+  .btn.min{padding:6px 8px; border-radius:8px; font-size:12px}
+  .months{
+    display:grid; grid-template-columns:repeat(12, var(--month-w));
+    margin-top:12px; margin-left:var(--gutter-left);
+    border:1px solid var(--grid); border-bottom:none; border-radius:12px 12px 0 0; overflow:hidden; background:#111a33
+  }
+  .month{padding:12px 14px;font-weight:900;color:#d1dcf7;border-right:1px solid var(--grid)}
+  .timeline{
+    position:relative; flex:1;
+    border:1px solid var(--grid); border-top:none; border-radius:0 0 12px 12px; background:#0c1429;
+    overflow:visible;
+  }
+  .lanes{position:relative}
+  .lane{position:relative; height:var(--lane-h); border-top:1px dashed var(--grid-dash); padding-left:var(--gutter-left)}
+  .lane:first-child{border-top:none}
+  .lane .grid{position:absolute; inset:0; display:grid; grid-template-columns:repeat(12,var(--month-w)); pointer-events:none}
+  .lane .grid > div{border-right:1px dashed var(--grid-dash)}
+  .ws-chip{
+    position:absolute; left:calc(var(--gutter-left) + 10px); top:14px; display:inline-flex; align-items:center; gap:8px;
+    background:#1a2240; border:1px solid #2b3351; color:#fff; border-radius:999px; padding:6px 10px; box-shadow:var(--shadow)
+  }
+  .ws-dot{width:10px;height:10px;border-radius:50%}
+  .ws-name{font-weight:900}
+  .lane-actions{position:absolute; left:calc(var(--gutter-left) + 10px); bottom:10px; display:flex; gap:8px}
+  .stage{
+    position:absolute; top:60px; height:50px; min-width:48px; display:flex; align-items:center; gap:12px; padding:10px 14px;
+    border-radius:12px; border:1px solid rgba(255,255,255,.08); color:#fff; cursor:pointer; box-shadow:var(--shadow);
+    background:linear-gradient(180deg, rgba(90,120,190,.58), rgba(26,46,86,.58));
+    backdrop-filter:saturate(120%);
+  }
+  .lane:nth-child(odd) .stage{background:linear-gradient(180deg, rgba(120,100,190,.55), rgba(62,48,120,.55)); border-color:rgba(255,255,255,.06)}
+  .stage .title{font-weight:900; font-size:18px; white-space:nowrap}
+  .progress{height:8px;width:170px;background:rgba(0,0,0,.25);border-radius:999px;overflow:hidden}
+  .progress > span{display:block;height:100%;background:linear-gradient(90deg,var(--good),#7af1c8)}
+
+  .expand{
+    position:absolute; left:0; background:rgba(13,20,40,.78); border:1px solid #253457; border-radius:12px;
+    box-shadow:var(--shadow); padding:14px; width:min(560px, calc(11*var(--month-w)));
+  }
+  .expand-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;color:#c8d6fb}
+  .expand-title{display:flex;align-items:center;gap:8px;font-weight:900}
+  .count{background:#121a34;border:1px solid #314368;border-radius:999px;padding:4px 8px;font-size:12px}
+  .rail{position:relative; margin-left:22px; padding-left:18px}
+  .rail::before{content:""; position:absolute; left:22px; top:0; bottom:0; width:2px; background:#2c3c66; border-radius:2px}
+  .ms{position:absolute; left:14px; transform:translateY(-50%); display:flex; align-items:center; gap:10px}
+  .dot{width:14px;height:14px;border-radius:50%; background:var(--warn); box-shadow:0 0 0 3px rgba(255,200,87,.22); cursor:pointer; position:relative}
+  .dot.done{background:var(--good); box-shadow:0 0 0 3px rgba(57,209,143,.22)}
+  .dot.blocked{background:var(--danger); box-shadow:0 0 0 3px rgba(255,107,107,.22)}
+  .dot.done::after{content:"✓"; position:absolute; inset:0; display:grid; place-items:center; font-weight:900; font-size:10px; color:#0d1b2a}
+  .label{display:flex; align-items:center; gap:10px; font-weight:900; background:#1d2546; color:#f6e7c3; border:1px solid #3a2c10; padding:6px 10px; border-radius:8px; white-space:nowrap; cursor:pointer}
+  .label.done{background:#132b20; border-color:#286347; color:#bff6de}
+  .label.blocked{background:#3a1d23; border-color:#6a2a37; color:#ffd4d8}
+  .date{color:#c7d1ea; font-weight:800; opacity:.9}
+
+  .modal{position:fixed; inset:0; background:rgba(8,12,20,.6); display:none; align-items:center; justify-content:center; z-index:20}
+  .modal.show{display:flex}
+  .dialog{width:min(760px, 92vw); background:#10192b; border:1px solid #2a3756; border-radius:16px; box-shadow:var(--shadow); padding:18px; color:var(--ink)}
+  .dialog h3{margin:4px 0 12px 0; font-size:18px}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  label{display:flex; flex-direction:column; gap:6px; font-weight:700; color:#c8d4f0}
+  input[type="text"], input[type="date"], input[type="number"], input[type="color"], select, textarea{
+    background:#0f1829; color:#eaf1ff; border:1px solid #314368; padding:10px 12px; border-radius:10px; outline:none
+  }
+  textarea{min-height:80px; resize:vertical}
+  .dialog .row{display:flex; gap:10px; justify-content:flex-end; margin-top:14px}
+  .btn.ghost{background:transparent}
+  .btn.danger{background:#341e24;border-color:#773845;color:#ffd5d5}
+  .btn.success{background:#123823;border-color:#2b6b46}
+
+  .board{display:inline-flex; align-items:center; gap:6px; background:#121b34; border:1px solid #2a3756; padding:6px 8px; border-radius:10px}
+  .board input{background:#0f1829;color:#eaf1ff;border:1px solid #314368;border-radius:8px;padding:6px 8px; width:160px}
+
+  @media (max-width:900px){
+    :root{ --month-w:180px; --lane-h:170px }
+    .grid{grid-template-columns:1fr}
+    .stage .title{font-size:16px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Workstream Progress Tracker</h1>
+    <span class="chip" id="fyBadge">FY 2025–26</span>
+    <span class="chip">FY start year</span>
+    <select id="fyStart" class="btn"></select>
+    <button class="btn" id="applyFY">Apply FY</button>
+
+    <div class="board" id="boardBox">
+      <strong>Board</strong>
+      <input id="boardId" placeholder="e.g. team-alpha" />
+      <button class="btn min" id="loadBoard">Load</button>
+      <button class="btn min" id="saveBoard">Save</button>
+      <button class="btn min" id="shareLink">Copy Link</button>
+    </div>
+
+    <div style="flex:1"></div>
+    <button class="btn primary" id="addWS">+ Add Workstream</button>
+    <button class="btn" id="exportBtn">Export JSON</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none" />
+    <button class="btn" id="importBtn">Import JSON</button>
+  </header>
+
+  <div class="months" id="months"></div>
+  <div class="timeline" id="timeline">
+    <div class="lanes" id="lanes"></div>
+  </div>
+</div>
+
+<div class="modal" id="modal" aria-hidden="true">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <h3 id="dlgTitle">Edit</h3>
+    <div class="grid" id="form"></div>
+    <div class="row">
+      <button class="btn ghost" id="cancel">Cancel</button>
+      <button class="btn danger" id="delete">Delete</button>
+      <button class="btn success" id="save">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $=s=>document.querySelector(s);
+  const uid=()=>Math.random().toString(36).slice(2,9);
+  const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+  const fmtFY=y=> y+'–'+String(y+1).slice(2);
+  const humanDate=(iso)=> new Date(iso+'T00:00:00').toLocaleDateString(undefined,{month:'short', day:'numeric', year:'numeric'});
+
+  // Enabled for shared board usage on Vercel
+  const SYNC = { enabled: true, baseURL: '/api/boards' };
+
+  const KEY='ws-vertical-milestones-v5';
+  let state = load() || def();
+  let ctx = null;
+
+  function def(){
+    const fyStartYear = 2025;
+    return {
+      fyStartYear,
+      workstreams:[
+        {id:uid(), name:'Core Growth', color:'#6ea8ff',
+          stages:[{id:uid(), title:'Pilot build', start:`${fyStartYear}-07-10`, end:`${fyStartYear}-09-25`, progress:40,
+                   milestones:[
+                     {id:uid(), title:'Kickoff', date:`${fyStartYear}-07-05`, status:'Done'},
+                     {id:uid(), title:'Go/No-Go', date:`${fyStartYear}-09-20`, status:'Planned'},
+                   ]}]},
+        {id:uid(), name:'Org Effectiveness', color:'#9c8bff',
+          stages:[{id:uid(), title:'Ops Readiness', start:`${fyStartYear}-09-05`, end:`${fyStartYear}-11-20`, progress:35,
+                   milestones:[{id:uid(), title:'Checkpoint Alpha', date:`${fyStartYear}-10-10`, status:'Planned'}] }]},
+        {id:uid(), name:'LCAP', color:'#ff9369', stages:[]}
+      ]
+    }
+  }
+  function load(){ try{return JSON.parse(localStorage.getItem(KEY))}catch{return null} }
+  function save(){ localStorage.setItem(KEY, JSON.stringify(state)) }
+
+  function fiscalMonths(){
+    const y=state.fyStartYear; const out=[];
+    for(let i=0;i<12;i++){ const m=(6+i)%12; const yy=m>=6?y:y+1; const d=new Date(yy, m, 1);
+      out.push({label:d.toLocaleString(undefined,{month:'short'})+' '+yy, y:yy, m:m+1, start:new Date(yy,m,1), end:new Date(yy,m+1,0)});
+    } return out;
+  }
+  function renderMonths(){
+    const wrap=$('#months'); wrap.innerHTML='';
+    fiscalMonths().forEach((mm,i)=>{
+      const div=document.createElement('div'); div.className='month'; div.textContent=mm.label; wrap.appendChild(div);
+    });
+    $('#fyBadge').textContent='FY '+fmtFY(state.fyStartYear);
+    const sel=$('#fyStart'); sel.innerHTML='';
+    for(let y=state.fyStartYear-1; y<=state.fyStartYear+3; y++){ const o=document.createElement('option'); o.value=y; o.textContent=fmtFY(y); if(y===state.fyStartYear) o.selected=true; sel.appendChild(o); }
+  }
+  function monthWidth(){ return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--month-w'))||220; }
+  function dateToX(iso){
+    const d = new Date(iso+'T00:00:00');
+    const months=fiscalMonths(); const idx = months.findIndex(mm=> mm.y===d.getFullYear() && mm.m===d.getMonth()+1);
+    if(idx<0) return 0;
+    const cell = monthWidth();
+    const daysInMonth=(new Date(d.getFullYear(), d.getMonth()+1, 0)).getDate();
+    const frac=(d.getDate()-1)/daysInMonth;
+    return idx*cell + frac*cell;
+  }
+  function spanPx(aISO,bISO){ return Math.max(40, dateToX(bISO)-dateToX(aISO)); }
+
+  function render(){
+    renderMonths();
+    const lanes=$('#lanes'); lanes.innerHTML='';
+    state.workstreams.forEach(ws=>{
+      const lane=document.createElement('div'); lane.className='lane';
+      const grid=document.createElement('div'); grid.className='grid';
+      for(let i=0;i<12;i++) grid.appendChild(document.createElement('div'));
+      lane.appendChild(grid);
+
+      const chip=document.createElement('div'); chip.className='ws-chip';
+      chip.innerHTML=`<span class="ws-dot" style="background:${ws.color}"></span><span class="ws-name">${ws.name}</span>`;
+      chip.addEventListener('click', ()=>openModal({type:'workstream', wsId: ws.id}));
+      lane.appendChild(chip);
+
+      const actions=document.createElement('div'); actions.className='lane-actions';
+      const addStage=document.createElement('button'); addStage.className='btn min'; addStage.textContent='+ Stage';
+      addStage.onclick=(e)=>{ e.stopPropagation(); openModal({type:'stage-create', wsId: ws.id}); };
+      actions.appendChild(addStage);
+      lane.appendChild(actions);
+
+      const base = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--lane-h'))||150;
+      let needHeight = base;
+
+      ws.stages.forEach(st=>{
+        const left=dateToX(st.start)+parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gutter-left'))||28;
+        const width=spanPx(st.start, st.end);
+
+        const stage=document.createElement('div'); stage.className='stage';
+        stage.style.left=left+'px'; stage.style.width=width+'px';
+        stage.innerHTML=`<div class="title">${st.title}</div><div class="progress"><span style="width:${clamp(st.progress||0,0,100)}%"></span></div>`;
+
+        stage.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          st._expanded = !st._expanded;
+          save(); render();
+        });
+        lane.appendChild(stage);
+
+        if(st._expanded){
+          const exp=document.createElement('div'); exp.className='expand';
+          const expTop = 60 + 50 + 12;
+          const expLeft = left;
+          exp.style.top = expTop+'px'; exp.style.left = expLeft+'px';
+          exp.style.width = Math.max(width, 380)+'px';
+
+          const head=document.createElement('div'); head.className='expand-header';
+          head.innerHTML=`<div class="expand-title">Milestones <span class="count">${(st.milestones||[]).length}</span></div>
+                          <div class="x-actions">
+                            <button class="btn min" data-act="edit-stage">Edit Stage</button>
+                            <button class="btn min" data-act="add-ms">+ Milestone</button>
+                          </div>`;
+          head.querySelector('[data-act="edit-stage"]').onclick=(e)=>{ e.stopPropagation(); openModal({type:'stage', wsId: ws.id, stageId: st.id}); };
+          head.querySelector('[data-act="add-ms"]').onclick=(e)=>{ e.stopPropagation(); openModal({type:'milestone-create', wsId: ws.id, stageId: st.id}); };
+          exp.appendChild(head);
+
+          const rail=document.createElement('div'); rail.className='rail';
+          const sT = new Date(st.start+'T00:00:00').getTime();
+          const eT = new Date(st.end+'T00:00:00').getTime();
+          const stageDays = Math.max(1, Math.round((eT - sT) / (1000*60*60*24)));
+          const topPad = 12, bottomPad = 28;
+          let railH = Math.min(560, Math.max(160, stageDays * 4 + topPad + bottomPad));
+          let innerH = railH - topPad - bottomPad;
+          const MIN_GAP = 26;
+
+          const list = (st.milestones||[]).slice().sort((a,b)=> a.date.localeCompare(b.date));
+          let y = list.map(ms=>{
+            const t = new Date(ms.date+'T00:00:00').getTime();
+            const pct = ((t - sT) / Math.max(1,(eT - sT)));
+            return Math.round(topPad + clamp(pct,0,1) * innerH);
+          });
+          for(let i=1;i<y.length;i++){ if(y[i] - y[i-1] < MIN_GAP) y[i] = y[i-1] + MIN_GAP; }
+          const maxY = y.length? y[y.length-1] : topPad;
+          const limit = topPad + innerH;
+          if(maxY > limit){ const extra = maxY - limit; railH += extra + 1; innerH = railH - topPad - bottomPad; }
+          rail.style.height = railH+'px';
+
+          list.forEach((ms,idx)=>{
+            if(!ms.status) ms.status='Planned';
+            const item=document.createElement('div'); item.className='ms'; item.style.top=y[idx]+'px';
+            const labelCls = ms.status==='Done'?'label done': ms.status==='Blocked'?'label blocked':'label';
+            const dotCls = ms.status==='Done'?'dot done': ms.status==='Blocked'?'dot blocked':'dot';
+            item.innerHTML=`<div class="${dotCls}" title="Click to toggle done"></div>
+                            <div class="${labelCls}" title="Click to edit">${escapeHtml(ms.title)} <span class="date">${humanDate(ms.date)}</span></div>`;
+            item.querySelector('.dot').addEventListener('click', (e)=>{
+              e.stopPropagation();
+              ms.status = (ms.status==='Done') ? 'Planned' : 'Done';
+              save(); render();
+            });
+            item.querySelector('.label, .label.done, .label.blocked').addEventListener('click', (e)=>{
+              e.stopPropagation();
+              openModal({type:'milestone', wsId: ws.id, stageId: st.id, milestoneId: ms.id});
+            });
+            rail.appendChild(item);
+          });
+
+          exp.appendChild(rail);
+          lane.appendChild(exp);
+
+          const needed = expTop + railH + 24;
+          needHeight = Math.max(needHeight, needed);
+        }
+      });
+
+      lane.style.height = needHeight+'px';
+      lanes.appendChild(lane);
+    });
+  }
+
+  const modal=$('#modal'), form=$('#form'), titleEl=$('#dlgTitle');
+  $('#cancel').onclick=()=>closeModal();
+  $('#save').onclick=()=>saveModal();
+  $('#delete').onclick=()=>deleteModal();
+
+  function openModal(c){
+    const field=(label,type,id,value)=>{ const w=document.createElement('label'); w.innerHTML=`${label}<input id="${id}" type="${type}" value="${value??''}" />`; return w; };
+    const textarea=(label,id,value)=>{ const w=document.createElement('label'); w.innerHTML=`${label}<textarea id="${id}">${value??''}</textarea>`; return w; };
+
+    ctx=c; form.innerHTML=''; titleEl.textContent='Edit';
+    $('#delete').style.display = (c.type.endsWith('create')) ? 'none' : 'inline-flex';
+
+    if(c.type==='workstream'){
+      const ws=getWS(c.wsId);
+      titleEl.textContent='Edit Workstream';
+      form.appendChild(field('Name','text','wsName', ws.name));
+      form.appendChild(field('Color','color','wsColor', ws.color||'#6ea8ff'));
+    }
+    if(c.type==='stage' || c.type==='stage-create'){
+      const ws=getWS(c.wsId);
+      const st = c.type==='stage' ? getStage(ws, c.stageId) :
+        { title:'New Stage', start:`${state.fyStartYear}-07-05`, end:`${state.fyStartYear}-07-25`, progress:0 };
+      titleEl.textContent = c.type==='stage' ? 'Edit Stage' : 'Add Stage';
+      form.appendChild(field('Title','text','stTitle', st.title));
+      form.appendChild(field('Progress (0–100)','number','stProg', st.progress||0));
+      form.appendChild(field('Start','date','stStart', st.start));
+      form.appendChild(field('End','date','stEnd', st.end));
+      form.appendChild(textarea('Notes','stNotes', st.notes||''));
+    }
+    if(c.type==='milestone' || c.type==='milestone-create'){
+      const ws=getWS(c.wsId);
+      const st=getStage(ws, c.stageId);
+      const ms = c.type==='milestone' ? getMilestone(st, c.milestoneId) : { title:'New Milestone', date: st ? st.start : `${state.fyStartYear}-07-10`, status:'Planned' };
+      if(!ms.status) ms.status='Planned';
+      titleEl.textContent = c.type==='milestone' ? 'Edit Milestone' : 'Add Milestone';
+      form.appendChild(field('Title','text','msTitle', ms.title));
+      form.appendChild(field('Due date','date','msDate', ms.date));
+      const wrap=document.createElement('label'); wrap.textContent='Status';
+      const sel=document.createElement('select'); sel.id='msStatus';
+      ['Planned','Done','Blocked'].forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent=s; if(ms.status===s) o.selected=true; sel.appendChild(o); });
+      wrap.appendChild(sel); form.appendChild(wrap);
+      const hint=document.createElement('div'); hint.style.gridColumn='1/-1'; hint.style.color='#9fb0d6'; hint.textContent=`Must fall within stage dates: ${humanDate(st.start)} – ${humanDate(st.end)}`;
+      form.appendChild(hint);
+    }
+
+    modal.classList.add('show'); modal.setAttribute('aria-hidden','false');
+  }
+  function closeModal(){ modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); ctx=null; }
+
+  function saveModal(){
+    if(!ctx) return;
+    if(ctx.type==='workstream'){
+      const ws=getWS(ctx.wsId);
+      ws.name=$('#wsName').value.trim()||ws.name;
+      ws.color=$('#wsColor').value;
+    }
+    if(ctx.type==='stage' || ctx.type==='stage-create'){
+      const ws=getWS(ctx.wsId);
+      const payload={ title:$('#stTitle').value.trim()||'Stage', start:$('#stStart').value, end:$('#stEnd').value, progress:clamp(parseInt($('#stProg').value||'0'),0,100), notes:$('#stNotes').value };
+      if(new Date(payload.start) > new Date(payload.end)){ alert('Stage start must be before end.'); return; }
+      if(ctx.type==='stage'){ Object.assign(getStage(ws, ctx.stageId), payload); } else { ws.stages.push({id:uid(), milestones:[], ...payload}); }
+    }
+    if(ctx.type==='milestone' || ctx.type==='milestone-create'){
+      const ws=getWS(ctx.wsId);
+      const st=getStage(ws, ctx.stageId);
+      const payload={ title:$('#msTitle').value.trim()||'Milestone', date:$('#msDate').value, status:$('#msStatus').value };
+      const d=new Date(payload.date), s=new Date(st.start), e=new Date(st.end);
+      if(d < s || d > e){ alert(`Milestone date must be within the stage timeframe (${humanDate(st.start)} – ${humanDate(st.end)}).`); return; }
+      if(ctx.type==='milestone'){ Object.assign(getMilestone(st, ctx.milestoneId), payload); } else { (st.milestones||(st.milestones=[])).push({id:uid(), ...payload}); }
+    }
+    save(); render(); closeModal();
+  }
+  function deleteModal(){
+    if(!ctx || ctx.type.endsWith('create')) return;
+    if(!confirm('Delete?')) return;
+    if(ctx.type==='workstream'){
+      state.workstreams = state.workstreams.filter(w=>w.id!==ctx.wsId);
+    }
+    if(ctx.type==='stage'){
+      const ws=getWS(ctx.wsId);
+      ws.stages = ws.stages.filter(s=>s.id!==ctx.stageId);
+    }
+    if(ctx.type==='milestone'){
+      const ws=getWS(ctx.wsId);
+      const st=getStage(ws, ctx.stageId);
+      st.milestones = (st.milestones||[]).filter(m=>m.id!==ctx.milestoneId);
+    }
+    save(); render(); closeModal();
+  }
+
+  const getWS = id => state.workstreams.find(w=>w.id===id);
+  const getStage = (ws, sid) => (ws?.stages||[]).find(s=>s.id===sid);
+  const getMilestone = (st, mid) => (st?.milestones||[]).find(m=>m.id===mid);
+  const escapeHtml = s => (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',\"'\":'&#39;'}[m]));
+
+  // Sharing controls
+  header();
+  function header(){
+    $('#applyFY').onclick=()=>{ state.fyStartYear = +$('#fyStart').value.split('–')[0]; save(); render(); populateFY(); };
+    $('#addWS').onclick=()=>{ state.workstreams.push({id:uid(), name:'New Workstream', color:randColor(), stages:[]}); save(); render(); };
+    $('#exportBtn').onclick=()=>{
+      const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='workstreams.json'; a.click();
+    };
+    $('#importBtn').onclick=()=> $('#importFile').click();
+    $('#importFile').onchange=(e)=>{
+      const f=e.target.files[0]; if(!f) return;
+      const r=new FileReader(); r.onload=()=>{ try{ const j=JSON.parse(r.result); if(j && j.workstreams){ state=j; save(); populateFY(); render(); } }catch{ alert('Invalid JSON'); } }; r.readAsText(f);
+    };
+
+    // Board controls (enabled)
+    const urlParams = new URLSearchParams(location.search);
+    const qBoard = urlParams.get('board');
+    if(qBoard){ $('#boardId').value = qBoard; loadBoardById(qBoard); }
+    $('#loadBoard').onclick = ()=> loadBoardById($('#boardId').value.trim());
+    $('#saveBoard').onclick = ()=> saveBoardId($('#boardId').value.trim());
+    $('#shareLink').onclick = ()=>{
+      const id=$('#boardId').value.trim(); if(!id) return alert('Enter a Board ID first.');
+      const link = `${location.origin}${location.pathname}?board=${encodeURIComponent(id)}`;
+      navigator.clipboard.writeText(link).then(()=> alert('Share link copied to clipboard.'));
+    };
+  }
+  function populateFY(){
+    $('#fyBadge').textContent='FY '+fmtFY(state.fyStartYear);
+    const sel=$('#fyStart'); sel.innerHTML='';
+    for(let y=state.fyStartYear-1; y<=state.fyStartYear+3; y++){ const o=document.createElement('option'); o.value=y; o.textContent=fmtFY(y); if(y===state.fyStartYear) o.selected=true; sel.appendChild(o); }
+  }
+  function randColor(){ const c=['#6ea8ff','#9c8bff','#ff9369','#ffd56a','#3fd0a7','#e16de3','#5fd0ff']; return c[Math.floor(Math.random()*c.length)] }
+
+  async function loadBoardById(id){
+    if(!id) return alert('Enter a Board ID');
+    try{
+      const res = await fetch(`/api/boards/${encodeURIComponent(id)}`);
+      if(res.ok){
+        const json = await res.json();
+        if(json && json.workstreams){ state = json; save(); render(); populateFY(); }
+        else alert('No data found for that board.');
+      }else alert('Load failed.');
+    }catch(e){ alert('Load error: '+e.message); }
+  }
+  async function saveBoardId(id){
+    if(!id) return alert('Enter a Board ID');
+    try{
+      const res = await fetch(`/api/boards/${encodeURIComponent(id)}`, {
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(state)
+      });
+      if(res.ok){ alert('Saved to board "'+id+'".'); }
+      else alert('Save failed.');
+    }catch(e){ alert('Save error: '+e.message); }
+  }
+
+  function init(){ populateFY(); render(); }
+  init();
+})();
+</script>
+</body>
+</html>
