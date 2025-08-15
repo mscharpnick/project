@@ -30,7 +30,7 @@
     font:500 14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;
     background:radial-gradient(1200px 600px at 20% -10%, #0f1b37 0%, transparent 50%),
                linear-gradient(180deg, var(--panel-2), #0a1223 60%);
-    overflow:auto; /* page scroll */
+    overflow:auto;
   }
   .app{min-height:100%; padding:20px clamp(16px,3vw,28px) 24px; display:flex; flex-direction:column; gap:12px}
   header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -166,8 +166,11 @@
   const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
   const fmtFY=y=> y+'–'+String(y+1).slice(2);
   const humanDate=(iso)=> new Date(iso+'T00:00:00').toLocaleDateString(undefined,{month:'short', day:'numeric', year:'numeric'});
+  const escapeHtml = s => (s||'').replace(/[&<>"']/g, m => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  })[m]);
 
-  // Enabled for shared board usage on Vercel
+  // Enable shared board usage
   const SYNC = { enabled: true, baseURL: '/api/boards' };
 
   const KEY='ws-vertical-milestones-v5';
@@ -203,7 +206,7 @@
   }
   function renderMonths(){
     const wrap=$('#months'); wrap.innerHTML='';
-    fiscalMonths().forEach((mm,i)=>{
+    fiscalMonths().forEach((mm)=>{
       const div=document.createElement('div'); div.className='month'; div.textContent=mm.label; wrap.appendChild(div);
     });
     $('#fyBadge').textContent='FY '+fmtFY(state.fyStartYear);
@@ -310,7 +313,7 @@
               ms.status = (ms.status==='Done') ? 'Planned' : 'Done';
               save(); render();
             });
-            item.querySelector('.label, .label.done, .label.blocked').addEventListener('click', (e)=>{
+            item.querySelector('.label').addEventListener('click', (e)=>{
               e.stopPropagation();
               openModal({type:'milestone', wsId: ws.id, stageId: st.id, milestoneId: ms.id});
             });
@@ -423,10 +426,8 @@
   const getWS = id => state.workstreams.find(w=>w.id===id);
   const getStage = (ws, sid) => (ws?.stages||[]).find(s=>s.id===sid);
   const getMilestone = (st, mid) => (st?.milestones||[]).find(m=>m.id===mid);
-  const escapeHtml = s => (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',\"'\":'&#39;'}[m]));
 
-  // Sharing controls
-  header();
+  // Header & share
   function header(){
     $('#applyFY').onclick=()=>{ state.fyStartYear = +$('#fyStart').value.split('–')[0]; save(); render(); populateFY(); };
     $('#addWS').onclick=()=>{ state.workstreams.push({id:uid(), name:'New Workstream', color:randColor(), stages:[]}); save(); render(); };
@@ -440,7 +441,6 @@
       const r=new FileReader(); r.onload=()=>{ try{ const j=JSON.parse(r.result); if(j && j.workstreams){ state=j; save(); populateFY(); render(); } }catch{ alert('Invalid JSON'); } }; r.readAsText(f);
     };
 
-    // Board controls (enabled)
     const urlParams = new URLSearchParams(location.search);
     const qBoard = urlParams.get('board');
     if(qBoard){ $('#boardId').value = qBoard; loadBoardById(qBoard); }
@@ -483,7 +483,7 @@
     }catch(e){ alert('Save error: '+e.message); }
   }
 
-  function init(){ populateFY(); render(); }
+  function init(){ populateFY(); header(); render(); }
   init();
 })();
 </script>
